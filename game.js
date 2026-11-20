@@ -12,6 +12,7 @@
   // UI Elements
   const hudDistance = document.getElementById('hud-distance');
   const hudScore = document.getElementById('hud-score');
+  const hudCoins = document.getElementById('hud-coins');
   const hudBest = document.getElementById('hud-best');
   const hunterBar = document.getElementById('hunter-bar');
   const hunterDistText = document.getElementById('hunter-dist-text');
@@ -235,7 +236,11 @@
     surgeMeter: 100,
     surgeActiveTimer: 0,
     ultraTimer: 0,
-    nextBonusSpawnTimer: 6,
+    ultraPowerDuration: 7.5,
+    ultraInstinctTimer: 0,
+    ultraInstinctDuration: 14.0,
+    ganjaaCoins: 0,
+    nextBonusSpawnTimer: 24,
     hunterGap: 28,
     screenShake: 0,
     bgScrollX: 0,
@@ -459,16 +464,18 @@
     };
     rooftops.push(roof);
 
-    // Sometimes drop an Ultra Power Bonus item from the sky onto this rooftop!
-    if (!isFirst && Math.random() < 0.55) {
+    // Sometimes drop a Ganjaa Bonus item from the sky onto this rooftop (4x rarer: ~13.75% chance)
+    if (!isFirst && Math.random() < 0.1375) {
       const dropX = x + 260 + Math.random() * Math.max(200, width - 520);
-      const targetY = y - 85 - Math.random() * 65;
+      const targetY = y - 105 - Math.random() * 65;
       bonusDrops.push({
         x: dropX,
-        y: -80 - Math.random() * 140, // starts high in the sky and drops down
+        y: -120 - Math.random() * 140,
         targetY,
         vy: 240 + Math.random() * 90,
-        size: 84,
+        size: 168,
+        ttl: 5.5, // Time limit before the dropped bonus expires!
+        maxTtl: 5.5,
         phase: Math.random() * Math.PI * 2,
         collected: false
       });
@@ -512,9 +519,12 @@
     state.surgeMeter = 100;
     state.surgeActiveTimer = 0;
     state.ultraTimer = 0;
-    state.nextBonusSpawnTimer = 5.5;
+    state.ultraInstinctTimer = 0;
+    state.ganjaaCoins = 0;
+    state.nextBonusSpawnTimer = 24;
     state.hunterGap = 28;
     state.screenShake = 0;
+    if (hudCoins) hudCoins.textContent = '0/10';
   }
 
   // ---------------------------------------------------------------------------
@@ -875,7 +885,12 @@
     state.baseSpeed = Math.min(state.maxSpeed, 520 + state.distance * 0.22);
     let currentSpeed = state.baseSpeed;
 
-    if (state.ultraTimer > 0) {
+    if (state.ultraInstinctTimer > 0) {
+      state.ultraInstinctTimer -= dt;
+      currentSpeed *= 1.95;
+      state.surgeMeter = 100;
+      state.hunterGap = 40;
+    } else if (state.ultraTimer > 0) {
       state.ultraTimer -= dt;
       currentSpeed *= 1.55;
       state.surgeMeter = 100;
@@ -888,19 +903,21 @@
       currentSpeed *= 0.62;
     }
 
-    // Periodic mid-run sky drop guarantee so the player sees drops regularly
+    // 4x rarer periodic mid-run sky drop timer (every 36-56s)
     state.nextBonusSpawnTimer -= dt;
     if (state.nextBonusSpawnTimer <= 0) {
-      state.nextBonusSpawnTimer = 9 + Math.random() * 5;
+      state.nextBonusSpawnTimer = 36 + Math.random() * 20;
       const aheadRoof = rooftops.find((r) => r.x + r.w > runner.x + 550 && r.x < runner.x + 1100);
       if (aheadRoof) {
         const dropX = Math.max(aheadRoof.x + 150, Math.min(aheadRoof.x + aheadRoof.w - 150, runner.x + 680));
         bonusDrops.push({
           x: dropX,
-          y: -60,
-          targetY: aheadRoof.y - 95,
+          y: -100,
+          targetY: aheadRoof.y - 110,
           vy: 280,
-          size: 84,
+          size: 168,
+          ttl: 5.5,
+          maxTtl: 5.5,
           phase: Math.random() * Math.PI * 2,
           collected: false
         });
@@ -937,13 +954,21 @@
       }
     }
 
-    // Update Falling / Floating Ultra Bonus Drops
+    // Update Falling / Floating Bonus Drops & Countdown Time Limit
     for (let i = bonusDrops.length - 1; i >= 0; i--) {
       const b = bonusDrops[i];
       b.x -= dx;
       b.phase += dt * 4.2;
       if (b.y < b.targetY) {
         b.y = Math.min(b.targetY, b.y + b.vy * dt);
+      } else if (b.x < W) {
+        // Count down pickup time limit once on-screen and landed
+        b.ttl -= dt;
+        if (b.ttl <= 0) {
+          addFloatingText('BONUS EXPIRED!', b.x, b.y - 40, '#94a3b8');
+          bonusDrops.splice(i, 1);
+          continue;
+        }
       }
       if (b.x < -200 || b.collected) {
         bonusDrops.splice(i, 1);
@@ -1048,13 +1073,19 @@
       }
     } else {
       runner.onGround = false;
-      // Ultra Power Sky-Boost: Automatically launch across gaps if falling below rooftop level during Ultra Mode!
-      if (state.ultraTimer > 0 && runner.y > H * 0.78 && runner.vy > 0) {
-        runner.vy = -740;
+      // Sky-Boost during Ganjaa Power or Ultra Instinct Mode!
+      if ((state.ultraTimer > 0 || state.ultraInstinctTimer > 0) && runner.y > H * 0.78 && runner.vy > 0) {
+        runner.vy = -750;
         runner.isFlipping = true;
         runner.flipAngle = 0;
-        spawnSparks(runner.x, runner.y, '#4ade80', 18);
-        addFloatingText('ULTRA SKY-BOOST!', runner.x, runner.y - 170, '#4ade80');
+        const boostColor = state.ultraInstinctTimer > 0 ? '#e2e8f0' : '#4ade80';
+        spawnSparks(runner.x, runner.y, boostColor, 18);
+        addFloatingText(
+          state.ultraInstinctTimer > 0 ? 'ULTRA INSTINCT SKY-STEP!' : 'GANJAA SKY-BOOST!',
+          runner.x,
+          runner.y - 170,
+          boostColor
+        );
         sfx.vault();
       }
     }
@@ -1071,22 +1102,39 @@
       h: runner.isSliding ? 78 : 164
     };
 
-    // Check Ultra Bonus Drop Pickup
+    // Check Ganjaa Bonus Drop Pickup
     bonusDrops.forEach((b) => {
       if (b.collected) return;
       const hoverY = b.y + Math.sin(b.phase) * 10;
       const distX = Math.abs(runner.x - b.x);
       const distY = Math.abs((runner.y - 84) - hoverY);
-      if (distX < 68 && distY < 96) {
+      if (distX < 98 && distY < 118) {
         b.collected = true;
-        state.ultraTimer = 7.5; // 7.5 seconds of Ultra Power!
+        state.ganjaaCoins += 1;
         state.surgeMeter = 100;
         state.hunterGap = 38;
-        state.score += 1000;
-        state.screenShake = 9;
+        state.screenShake = 10;
         spawnSparks(b.x, hoverY, '#4ade80', 26);
         spawnSparks(b.x, hoverY, '#facc15', 18);
-        addFloatingText('★ ULTRA POWER ACTIVATED! +1000 ★', runner.x, runner.y - 205, '#4ade80');
+
+        if (state.ganjaaCoins >= 10 && state.ganjaaCoins % 10 === 0) {
+          // 10 Coins Consumed -> ULTRA INSTINCT MODE + Big Text "HIGH ON GANJAAA"
+          state.ultraInstinctTimer = state.ultraInstinctDuration;
+          state.ultraTimer = 0;
+          state.score += 5000;
+          state.screenShake = 18;
+          spawnSparks(runner.x, runner.y - 90, '#ffffff', 40);
+          spawnSparks(runner.x, runner.y - 90, '#38bdf8', 35);
+          addFloatingText('★ ULTRA INSTINCT MODE! +5000 ★', runner.x, runner.y - 220, '#38bdf8');
+        } else {
+          state.ultraTimer = state.ultraPowerDuration;
+          state.score += 1000;
+          addFloatingText('★ GANJAA POWER ACTIVATED! +1000 ★', runner.x, runner.y - 205, '#4ade80');
+        }
+
+        if (hudCoins) {
+          hudCoins.textContent = `${state.ganjaaCoins % 10 === 0 && state.ultraInstinctTimer > 0 ? 10 : state.ganjaaCoins % 10}/10`;
+        }
         sfx.ultra();
       }
     });
@@ -1114,11 +1162,18 @@
         rBox.y + rBox.h > obs.y + 4;
 
       if (overlap) {
-        if (state.ultraTimer > 0) {
+        if (state.ultraInstinctTimer > 0) {
+          obs.hit = true;
+          obs.cleared = true;
+          spawnSparks(obs.x + obs.w / 2, obs.y + obs.h / 2, '#38bdf8', 28);
+          addFloatingText('ULTRA INSTINCT +500', runner.x, runner.y - 195, '#e2e8f0');
+          state.score += 500;
+          sfx.vault();
+        } else if (state.ultraTimer > 0) {
           obs.hit = true;
           obs.cleared = true;
           spawnSparks(obs.x + obs.w / 2, obs.y + obs.h / 2, '#4ade80', 22);
-          addFloatingText('ULTRA SMASH +250', runner.x, runner.y - 190, '#4ade80');
+          addFloatingText('GANJAA SMASH +250', runner.x, runner.y - 190, '#4ade80');
           state.score += 250;
           sfx.vault();
         } else if (state.surgeActiveTimer > 0) {
@@ -1160,13 +1215,14 @@
     const targetHunterY = hunterRoof ? hunterRoof.y : runner.y;
     hunter.y += (targetHunterY - hunter.y) * Math.min(1, dt * 14);
 
-    if (state.ultraTimer > 0 || state.surgeActiveTimer > 0 || runner.vaultTimer > 0 || runner.isFlipping) {
+    if (state.ultraInstinctTimer > 0 || state.ultraTimer > 0 || state.surgeActiveTimer > 0 || runner.vaultTimer > 0 || runner.isFlipping) {
       runner.trail.push({
         x: runner.x,
         y: runner.y,
         isSliding: runner.isSliding,
+        isUltraInstinct: state.ultraInstinctTimer > 0,
         isUltra: state.ultraTimer > 0,
-        alpha: 0.65
+        alpha: 0.68
       });
     }
     for (let i = runner.trail.length - 1; i >= 0; i--) {
@@ -1212,11 +1268,18 @@
       hunterDistText.style.color = '#22c55e';
     }
 
-    surgeBar.style.width = `${state.surgeMeter}%`;
-    if (state.ultraTimer > 0) {
-      surgeText.textContent = `ULTRA (${state.ultraTimer.toFixed(1)}s)`;
+    if (state.ultraInstinctTimer > 0) {
+      const pct = (state.ultraInstinctTimer / state.ultraInstinctDuration) * 100;
+      surgeBar.style.width = `${pct}%`;
+      surgeText.textContent = `ULTRA INSTINCT (${state.ultraInstinctTimer.toFixed(1)}s)`;
+      surgeText.style.color = '#38bdf8';
+    } else if (state.ultraTimer > 0) {
+      const pct = (state.ultraTimer / state.ultraPowerDuration) * 100;
+      surgeBar.style.width = `${pct}%`;
+      surgeText.textContent = `GANJAA (${state.ultraTimer.toFixed(1)}s)`;
       surgeText.style.color = '#4ade80';
     } else {
+      surgeBar.style.width = `${state.surgeMeter}%`;
       surgeText.style.color = '';
       surgeText.textContent =
         state.surgeActiveTimer > 0
@@ -1542,6 +1605,8 @@
     const useFullImg = (!state.swapRoles && isHunter) || (state.swapRoles && !isHunter);
     const rimColor = isHunter
       ? '#ff2a85'
+      : state.ultraInstinctTimer > 0
+      ? '#e2e8f0'
       : state.ultraTimer > 0
       ? '#4ade80'
       : '#00e5ff';
@@ -1676,29 +1741,97 @@
   }
 
   function drawEffectsAndCallouts(zone) {
-    // Draw Falling / Hovering Ultra Bonus Drops (Clean normal uploaded image only)
+    // Draw Falling / Hovering Bonus Drops (Clean 2x uploaded image + subtle expiration timer when landing)
     bonusDrops.forEach((b) => {
       if (b.collected) return;
       const hoverY = b.y + Math.sin(b.phase) * 8;
 
       ctx.save();
       ctx.translate(b.x, hoverY);
+      // Blink warning when < 1.5s left on pickup time limit
+      if (b.ttl < 1.5 && Math.floor(b.ttl * 10) % 2 === 0) {
+        ctx.globalAlpha = 0.45;
+      }
       ctx.rotate(Math.sin(b.phase * 0.8) * 0.12);
       if (assets.loaded.bonusUltra) {
         ctx.drawImage(assets.bonusUltra, -b.size * 0.5, -b.size * 0.5, b.size, b.size);
       }
       ctx.restore();
+
+      // Show pickup expiration countdown above item once landed
+      if (b.y >= b.targetY - 2) {
+        ctx.save();
+        ctx.font = '800 13px "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = b.ttl < 1.8 ? '#ef4444' : '#facc15';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 6;
+        ctx.fillText(`${b.ttl.toFixed(1)}s`, b.x, hoverY - b.size * 0.42);
+        ctx.restore();
+      }
     });
 
     runner.trail.forEach((t) => {
       ctx.save();
       ctx.globalAlpha = t.alpha * 0.45;
-      ctx.fillStyle = t.isUltra ? '#4ade80' : (state.surgeActiveTimer > 0 ? '#ff2a85' : '#00e5ff');
+      ctx.fillStyle = t.isUltraInstinct
+        ? '#e2e8f0'
+        : t.isUltra
+        ? '#4ade80'
+        : state.surgeActiveTimer > 0
+        ? '#ff2a85'
+        : '#00e5ff';
       ctx.beginPath();
       ctx.arc(t.x, t.y - (t.isSliding ? 44 : 96), 34, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     });
+
+    // Draw Active Power Time Limit Overlay & Giant "HIGH ON GANJAAA" Ultra Instinct Banner
+    if (state.ultraInstinctTimer > 0) {
+      ctx.save();
+      const pulse = 1 + Math.sin(state.time * 10) * 0.06;
+      ctx.translate(W * 0.5, H * 0.24);
+      ctx.scale(pulse, pulse);
+      ctx.textAlign = 'center';
+
+      ctx.font = '900 54px "Segoe UI", Roboto, sans-serif';
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 24;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('HIGH ON GANJAAA', 0, 0);
+
+      ctx.font = '900 20px "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowBlur = 12;
+      ctx.fillText(`★ ULTRA INSTINCT MODE — ${state.ultraInstinctTimer.toFixed(1)}s ★`, 0, 32);
+
+      // Countdown progress bar
+      const barW = 320;
+      const pct = Math.max(0, state.ultraInstinctTimer / state.ultraInstinctDuration);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(-barW * 0.5, 44, barW, 7);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(-barW * 0.5, 44, barW * pct, 7);
+      ctx.restore();
+    } else if (state.ultraTimer > 0) {
+      ctx.save();
+      ctx.translate(W * 0.5, H * 0.22);
+      ctx.textAlign = 'center';
+      ctx.font = '900 26px "Segoe UI", Roboto, sans-serif';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = '#4ade80';
+      ctx.fillText(`GANJAA POWER ACTIVATED — ${state.ultraTimer.toFixed(1)}s`, 0, 0);
+
+      const barW = 240;
+      const pct = Math.max(0, state.ultraTimer / state.ultraPowerDuration);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.fillRect(-barW * 0.5, 12, barW, 6);
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(-barW * 0.5, 12, barW * pct, 6);
+      ctx.restore();
+    }
 
     particles.forEach((p) => {
       ctx.save();
