@@ -379,9 +379,9 @@
         } else if (kindRoll < 0.78) {
           obs = {
             x: ox,
-            y: y - 110,
-            w: 84,
-            h: 52,
+            y: y - 156,
+            w: 96,
+            h: 62,
             roofY: y,
             type: 'SLIDE_DUCT',
             cleared: false,
@@ -534,28 +534,28 @@
       runner.jumpCount = 1;
 
       if (nearObs) {
-        runner.vy = -660;
-        runner.vaultTimer = 0.42;
+        runner.vy = -730;
+        runner.vaultTimer = 0.44;
         const vaultNames = ['KONG VAULT', 'SPEED VAULT', 'MONKEY VAULT', 'DASH VAULT'];
         runner.vaultType = vaultNames[Math.floor(Math.random() * vaultNames.length)];
         nearObs.cleared = true;
         state.score += 150;
         state.surgeMeter = Math.min(100, state.surgeMeter + 18);
-        addFloatingText(`${runner.vaultType} +150`, runner.x + 20, runner.y - 110, '#00e5ff');
+        addFloatingText(`${runner.vaultType} +150`, runner.x + 20, runner.y - 195, '#00e5ff');
         spawnSparks(nearObs.x + nearObs.w / 2, nearObs.y, '#00e5ff', 14);
         sfx.vault();
       } else {
-        runner.vy = -690;
+        runner.vy = -760;
         sfx.jump();
       }
     } else if (runner.jumpCount < 2) {
-      runner.vy = -610;
+      runner.vy = -660;
       runner.jumpCount = 2;
       runner.isFlipping = true;
       runner.flipAngle = 0;
       state.score += 100;
-      addFloatingText('WEBSTER FLIP +100', runner.x, runner.y - 105, '#ff9d2e');
-      spawnSparks(runner.x, runner.y - 40, '#ff9d2e', 10);
+      addFloatingText('WEBSTER FLIP +100', runner.x, runner.y - 190, '#ff9d2e');
+      spawnSparks(runner.x, runner.y - 80, '#ff9d2e', 10);
       sfx.vault();
     }
   }
@@ -988,10 +988,10 @@
     }
 
     const rBox = {
-      x: runner.x - 15,
-      y: runner.isSliding ? runner.y - 40 : runner.y - 84,
-      w: 30,
-      h: runner.isSliding ? 40 : 82
+      x: runner.x - 24,
+      y: runner.isSliding ? runner.y - 78 : runner.y - 168,
+      w: 48,
+      h: runner.isSliding ? 78 : 164
     };
 
     obstacles.forEach((obs) => {
@@ -1046,7 +1046,7 @@
       return;
     }
 
-    const targetHunterX = runner.x - Math.max(38, state.hunterGap * 6.8);
+    const targetHunterX = runner.x - Math.max(76, state.hunterGap * 8.2);
     hunter.x += (targetHunterX - hunter.x) * Math.min(1, dt * 8);
     hunter.animPhase += dt * (currentSpeed / 40);
 
@@ -1425,6 +1425,8 @@
   function drawParkourCharacter(entity, isHunter) {
     ctx.save();
     ctx.translate(entity.x, entity.y);
+    // Double character scale (2x) anchored at feet (0, 0)
+    ctx.scale(2, 2);
 
     const useFullImg = (!state.swapRoles && isHunter) || (state.swapRoles && !isHunter);
     const rimColor = isHunter ? '#ff2a85' : '#00e5ff';
@@ -1564,7 +1566,7 @@
       ctx.globalAlpha = t.alpha * 0.45;
       ctx.fillStyle = state.surgeActiveTimer > 0 ? '#ff2a85' : '#00e5ff';
       ctx.beginPath();
-      ctx.arc(t.x, t.y - (t.isSliding ? 22 : 48), 18, 0, Math.PI * 2);
+      ctx.arc(t.x, t.y - (t.isSliding ? 44 : 96), 34, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     });
