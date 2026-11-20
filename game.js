@@ -240,7 +240,7 @@
     ultraInstinctTimer: 0,
     ultraInstinctDuration: 14.0,
     ganjaaCoins: 0,
-    nextBonusSpawnTimer: 24,
+    nextBonusSpawnTimer: 12,
     hunterGap: 28,
     screenShake: 0,
     bgScrollX: 0,
@@ -464,8 +464,8 @@
     };
     rooftops.push(roof);
 
-    // Sometimes drop a Ganjaa Bonus item from the sky onto this rooftop (4x rarer: ~13.75% chance)
-    if (!isFirst && Math.random() < 0.1375) {
+    // Sometimes drop a Ganjaa Bonus item from the sky onto this rooftop (2x rarity: ~27.5% chance)
+    if (!isFirst && Math.random() < 0.275) {
       const dropX = x + 260 + Math.random() * Math.max(200, width - 520);
       const targetY = y - 105 - Math.random() * 65;
       bonusDrops.push({
@@ -521,7 +521,7 @@
     state.ultraTimer = 0;
     state.ultraInstinctTimer = 0;
     state.ganjaaCoins = 0;
-    state.nextBonusSpawnTimer = 24;
+    state.nextBonusSpawnTimer = 12;
     state.hunterGap = 28;
     state.screenShake = 0;
     if (hudCoins) hudCoins.textContent = '0/10';
@@ -903,10 +903,10 @@
       currentSpeed *= 0.62;
     }
 
-    // 4x rarer periodic mid-run sky drop timer (every 36-56s)
+    // 2x rarity periodic mid-run sky drop timer (every 18-28s)
     state.nextBonusSpawnTimer -= dt;
     if (state.nextBonusSpawnTimer <= 0) {
-      state.nextBonusSpawnTimer = 36 + Math.random() * 20;
+      state.nextBonusSpawnTimer = 18 + Math.random() * 10;
       const aheadRoof = rooftops.find((r) => r.x + r.w > runner.x + 550 && r.x < runner.x + 1100);
       if (aheadRoof) {
         const dropX = Math.max(aheadRoof.x + 150, Math.min(aheadRoof.x + aheadRoof.w - 150, runner.x + 680));
