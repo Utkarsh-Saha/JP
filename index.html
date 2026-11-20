@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.json" />
   <title>VECTOR: DYSTOPIAN ROOFTOP RUNNER</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -14,52 +19,55 @@
     <div class="film-grain"></div>
     <div class="vignette"></div>
 
-    <!-- Top HUD -->
+    <!-- Top Compact Landscape HUD -->
     <header id="hud-top">
       <div class="hud-left">
         <div class="brand-badge">
           <span class="vector-tri">&#9654;</span>
-          <span class="brand-title">VECTOR // RUNNER</span>
+          <span class="brand-title">VECTOR</span>
         </div>
         <div class="stat-box">
-          <span class="stat-label">DISTANCE</span>
-          <span id="hud-distance" class="stat-value">0000 m</span>
+          <span class="stat-label">DIST</span>
+          <span id="hud-distance" class="stat-value">0000m</span>
         </div>
         <div class="stat-box">
           <span class="stat-label">SCORE</span>
           <span id="hud-score" class="stat-value">0</span>
         </div>
-        <div class="stat-box">
+        <div class="stat-box hide-xs">
           <span class="stat-label">BEST</span>
           <span id="hud-best" class="stat-value">0</span>
         </div>
       </div>
 
-      <!-- Zone Switcher Pills -->
+      <!-- Compact Zone Switcher Pills -->
       <div class="zone-selector" role="group" aria-label="Game Zones">
-        <button class="zone-btn active" data-zone="0" title="Hotkey: 1">
-          <span class="zone-num">Z1</span> DOWNTOWN DUSK
+        <button class="zone-btn active" data-zone="0" title="Zone 1: Downtown Dusk (Hotkey: 1)">
+          <span class="zone-num">Z1</span><span class="zone-label-text"> DUSK</span>
         </button>
-        <button class="zone-btn" data-zone="1" title="Hotkey: 2">
-          <span class="zone-num">Z2</span> INDUSTRIAL RAIN
+        <button class="zone-btn" data-zone="1" title="Zone 2: Industrial Rain (Hotkey: 2)">
+          <span class="zone-num">Z2</span><span class="zone-label-text"> RAIN</span>
         </button>
-        <button class="zone-btn" data-zone="2" title="Hotkey: 3">
-          <span class="zone-num">Z3</span> CYBER PLAZA DAWN
+        <button class="zone-btn" data-zone="2" title="Zone 3: Cyber Dawn (Hotkey: 3)">
+          <span class="zone-num">Z3</span><span class="zone-label-text"> DAWN</span>
         </button>
         <button id="btn-auto-zone" class="zone-btn auto-active" title="Auto-cycle zones every 450m">
-          AUTO CYCLE: ON
+          AUTO
         </button>
       </div>
 
       <div class="hud-right">
         <button id="btn-swap-chars" class="hud-action-btn" title="Swap Runner & Hunter Characters (Hotkey: C)">
-          &#8644; SWAP ROLES
+          &#8644;<span class="btn-label-desktop"> SWAP</span>
         </button>
         <button id="btn-style-mode" class="hud-action-btn" title="Toggle Character Render Style (Hotkey: V)">
-          STYLE: HYBRID
+          <span id="style-btn-text">HYBRID</span>
         </button>
         <button id="btn-audio" class="hud-action-btn" title="Toggle Synth Audio (Hotkey: M)">
-          &#9835; SFX: ON
+          &#9835;
+        </button>
+        <button id="btn-fullscreen" class="hud-action-btn" title="Fullscreen Landscape Mode">
+          &#9974;
         </button>
         <button id="btn-pause" class="hud-action-btn" title="Pause Game (Hotkey: P / ESC)">
           &#10074;&#10074;
@@ -67,11 +75,11 @@
       </div>
     </header>
 
-    <!-- Hunter Proximity & Adrenaline Bar -->
+    <!-- Compact Hunter Proximity & Adrenaline Bar -->
     <div id="hud-meters">
       <div class="meter-card">
         <div class="meter-header">
-          <span>HUNTER PROXIMITY</span>
+          <span>HUNTER</span>
           <span id="hunter-dist-text">SAFE (28m)</span>
         </div>
         <div class="meter-track hunter-track">
@@ -81,7 +89,7 @@
 
       <div class="meter-card">
         <div class="meter-header">
-          <span>PARKOUR SURGE [SHIFT / D]</span>
+          <span>SURGE</span>
           <span id="surge-text">READY</span>
         </div>
         <div class="meter-track surge-track">
@@ -97,77 +105,92 @@
       <div class="zone-banner-desc" id="zone-banner-desc">CLASSIC VECTOR TWILIGHT // MONORAIL CORRIDOR</div>
     </div>
 
-    <!-- Mobile / On-Screen Touch Controls -->
+    <!-- Ergonomic Mobile Thumb Controls (Left Thumb: Slide/Roll | Right Thumb: Surge + Jump/Vault) -->
     <div id="touch-controls">
-      <button id="touch-slide" class="touch-btn">SLIDE / ROLL<span>&#9660; S / DOWN</span></button>
-      <button id="touch-surge" class="touch-btn surge-btn">SURGE DASH<span>&#9889; SHIFT / D</span></button>
-      <button id="touch-jump" class="touch-btn">JUMP / VAULT<span>&#9650; SPACE / UP</span></button>
+      <div class="thumb-cluster left-cluster">
+        <button id="touch-slide" class="touch-btn slide-pad" aria-label="Slide or Roll">
+          <span class="touch-icon">&#9660;</span>
+          <span class="touch-title">SLIDE / ROLL</span>
+        </button>
+      </div>
+
+      <div class="thumb-cluster right-cluster">
+        <button id="touch-surge" class="touch-btn surge-pad" aria-label="Adrenaline Surge">
+          <span class="touch-icon">&#9889;</span>
+          <span class="touch-title">SURGE</span>
+        </button>
+        <button id="touch-jump" class="touch-btn jump-pad" aria-label="Jump or Vault">
+          <span class="touch-icon">&#9650;</span>
+          <span class="touch-title">JUMP / VAULT</span>
+        </button>
+      </div>
     </div>
 
-    <!-- Start / Pause / Game Over Modal Overlay -->
+    <!-- Start / Pause / Game Over Modal Overlay (Optimized for Mobile Landscape) -->
     <div id="modal-overlay" class="modal-overlay">
       <div class="modal-card">
-        <div class="modal-tag" id="modal-tag">DYSTOPIAN PARKOUR ESCAPE</div>
-        <h1 class="modal-title" id="modal-title">VECTOR: SHADOW RUN</h1>
-        <p class="modal-subtitle" id="modal-subtitle">
-          Break free from the system. Vault across pitch-black brutalist rooftops, slide beneath industrial ductwork, and outrun the Enforcer across three atmospheric megacity sectors.
-        </p>
-
-        <!-- Character Preview Cards -->
-        <div class="char-preview-grid">
-          <div class="char-card">
-            <div class="char-role-tag runner-tag" id="runner-role-label">RUNNER (YOU)</div>
-            <div class="char-img-wrap">
-              <img id="preview-runner-img" src="assets/char_head.png" alt="Runner Character" />
-            </div>
-            <div class="char-name" id="runner-name-label">Shadow Fugitive</div>
+        <div class="modal-header-row">
+          <div>
+            <div class="modal-tag" id="modal-tag">DYSTOPIAN PARKOUR ESCAPE</div>
+            <h1 class="modal-title" id="modal-title">VECTOR: SHADOW RUN</h1>
           </div>
-
-          <div class="vs-divider">
-            <span>VS</span>
-            <button id="modal-swap-btn" class="swap-pill-btn">&#8644; Swap Runner / Hunter</button>
-          </div>
-
-          <div class="char-card">
-            <div class="char-role-tag hunter-tag" id="hunter-role-label">ENFORCER (HUNTER)</div>
-            <div class="char-img-wrap">
-              <img id="preview-hunter-img" src="assets/char_full.png" alt="Hunter Character" />
-            </div>
-            <div class="char-name" id="hunter-name-label">Sector Commander</div>
-          </div>
+          <button id="btn-start-game" class="primary-play-btn">
+            &#9654; LAUNCH ESCAPE
+          </button>
         </div>
 
-        <!-- Zone Selection in Modal -->
-        <div class="modal-zones">
-          <div class="modal-zone-card active" data-zone="0">
-            <div class="mz-tag">ZONE 1 // DUSK</div>
-            <div class="mz-name">Downtown Rooftops</div>
-            <div class="mz-desc">Amber-indigo sunset, monorails, water towers, radio masts &amp; fire escapes.</div>
+        <p class="modal-subtitle" id="modal-subtitle">
+          Vault across pitch-black brutalist rooftops, slide beneath industrial ductwork, and outrun the Enforcer across three megacity sectors.
+        </p>
+
+        <div class="modal-body-grid">
+          <!-- Character Preview Cards -->
+          <div class="char-preview-grid">
+            <div class="char-card">
+              <div class="char-role-tag runner-tag" id="runner-role-label">RUNNER</div>
+              <div class="char-img-wrap">
+                <img id="preview-runner-img" src="assets/char_head.png" alt="Runner Character" />
+              </div>
+              <div class="char-name" id="runner-name-label">Shadow Fugitive</div>
+            </div>
+
+            <div class="vs-divider">
+              <button id="modal-swap-btn" class="swap-pill-btn">&#8644; Swap</button>
+            </div>
+
+            <div class="char-card">
+              <div class="char-role-tag hunter-tag" id="hunter-role-label">HUNTER</div>
+              <div class="char-img-wrap">
+                <img id="preview-hunter-img" src="assets/char_full.png" alt="Hunter Character" />
+              </div>
+              <div class="char-name" id="hunter-name-label">Sector Commander</div>
+            </div>
           </div>
-          <div class="modal-zone-card" data-zone="1">
-            <div class="mz-tag">ZONE 2 // STORM</div>
-            <div class="mz-name">Industrial District</div>
-            <div class="mz-desc">Rain-slicked factory roofs, cooling towers, searchlights &amp; steam pipes.</div>
-          </div>
-          <div class="modal-zone-card" data-zone="2">
-            <div class="mz-tag">ZONE 3 // DAWN</div>
-            <div class="mz-name">High-Tech Cyber Plaza</div>
-            <div class="mz-desc">Neon magenta &amp; burning gold dawn, holo-signs, skybridges &amp; shuttles.</div>
+
+          <!-- Zone Selection in Modal -->
+          <div class="modal-zones">
+            <div class="modal-zone-card active" data-zone="0">
+              <div class="mz-tag">ZONE 1 // DUSK</div>
+              <div class="mz-name">Downtown Rooftops</div>
+              <div class="mz-desc">Amber sunset, monorails &amp; radio towers.</div>
+            </div>
+            <div class="modal-zone-card" data-zone="1">
+              <div class="mz-tag">ZONE 2 // STORM</div>
+              <div class="mz-name">Industrial District</div>
+              <div class="mz-desc">Heavy rain, cooling towers &amp; searchlights.</div>
+            </div>
+            <div class="modal-zone-card" data-zone="2">
+              <div class="mz-tag">ZONE 3 // DAWN</div>
+              <div class="mz-name">Cyber Plaza</div>
+              <div class="mz-desc">Neon magenta dawn, holo-signs &amp; shuttles.</div>
+            </div>
           </div>
         </div>
 
         <div class="controls-legend">
-          <div><kbd>SPACE</kbd> / <kbd>W</kbd> / <kbd>&uarr;</kbd> Jump, Vault &amp; Flip</div>
-          <div><kbd>S</kbd> / <kbd>&darr;</kbd> Slide, Duck &amp; Fast Roll</div>
-          <div><kbd>SHIFT</kbd> / <kbd>D</kbd> Adrenaline Surge</div>
-          <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> Switch Zone</div>
-          <div><kbd>C</kbd> Swap Roles</div>
-        </div>
-
-        <div class="modal-actions">
-          <button id="btn-start-game" class="primary-play-btn">
-            &#9654; LAUNCH ROOFTOP ESCAPE
-          </button>
+          <span><kbd>TAP RIGHT</kbd> / <kbd>SWIPE &uarr;</kbd> / <kbd>SPACE</kbd> Jump &amp; Vault</span>
+          <span><kbd>TAP LEFT</kbd> / <kbd>SWIPE &darr;</kbd> / <kbd>S</kbd> Slide &amp; Roll</span>
+          <span><kbd>&#9889;</kbd> / <kbd>SHIFT</kbd> Surge Dash</span>
         </div>
       </div>
     </div>

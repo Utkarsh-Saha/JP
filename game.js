@@ -1,11 +1,11 @@
 /**
  * VECTOR: SHADOW RUN — 2D Side-Scrolling Parkour Runner
- * Strictly designed in the high-contrast 2D silhouette vector art style of Vector,
- * with deep atmospheric parallax layers, 3 distinct dystopian zones,
- * and dynamic integration of the uploaded character cutouts & zone backgrounds.
+ * Landscape-locked & mobile-optimized with a fixed 720p virtual coordinate height
+ * so physics, jump arcs, and obstacle spacing stay balanced across phones, tablets, and desktops.
  */
 
 (() => {
+  const gameContainer = document.getElementById('game-container');
   const canvas = document.getElementById('game-canvas');
   const ctx = canvas.getContext('2d');
 
@@ -30,7 +30,9 @@
   const btnSwapChars = document.getElementById('btn-swap-chars');
   const modalSwapBtn = document.getElementById('modal-swap-btn');
   const btnStyleMode = document.getElementById('btn-style-mode');
+  const styleBtnText = document.getElementById('style-btn-text');
   const btnAudio = document.getElementById('btn-audio');
+  const btnFullscreen = document.getElementById('btn-fullscreen');
   const btnPause = document.getElementById('btn-pause');
   const previewRunnerImg = document.getElementById('preview-runner-img');
   const previewHunterImg = document.getElementById('preview-hunter-img');
@@ -57,22 +59,8 @@
     assets.bgZones[idx].src = path;
   });
 
-  // Periodically retry loading bg_zone1.png and bg_zone3.png in case they finish generating while the page is open
-  setInterval(() => {
-    [0, 2].forEach((idx) => {
-      if (!assets.loaded.bg[idx]) {
-        const retryImg = new Image();
-        retryImg.onload = () => {
-          assets.bgZones[idx] = retryImg;
-          assets.loaded.bg[idx] = true;
-        };
-        retryImg.src = bgPaths[idx] + '?t=' + Date.now();
-      }
-    });
-  }, 4000);
-
   // ---------------------------------------------------------------------------
-  // 3 ZONES SPECIFICATION (Strictly matching the prompt's 3 Variations)
+  // 3 ZONES SPECIFICATION
   // ---------------------------------------------------------------------------
   const ZONES = [
     {
@@ -152,7 +140,7 @@
   ];
 
   // ---------------------------------------------------------------------------
-  // WEB AUDIO SYNTHESIZER (No external audio files required)
+  // WEB AUDIO SYNTHESIZER
   // ---------------------------------------------------------------------------
   class SoundEngine {
     constructor() {
@@ -214,28 +202,29 @@
   const sfx = new SoundEngine();
 
   // ---------------------------------------------------------------------------
-  // GAME STATE & CONFIGURATION
+  // FIXED VIRTUAL LANDSCAPE COORDINATE SPACE (720p base height)
+  // Guarantees identical physics, character scale, and jump height on all mobile phones
   // ---------------------------------------------------------------------------
-  let W = window.innerWidth;
-  let H = window.innerHeight;
-  let groundBaseY = H * 0.78;
+  let H = 720;
+  let W = 1280;
+  let isForcedLandscape = false;
+  let groundBaseY = H * 0.76;
 
   const state = {
     mode: 'MENU', // MENU, PLAYING, PAUSED, GAMEOVER
     currentZone: 0,
     autoCycleZones: true,
-    swapRoles: false, // false => Runner: charHead, Hunter: charFull; true => swapped
-    renderStyle: 0,   // 0: HYBRID (Vector Silhouette + Photo Cutout), 1: PURE VECTOR SILHOUETTE, 2: FULL CUTOUT HERO
+    swapRoles: false,
+    renderStyle: 0, // 0: HYBRID, 1: SILHOUETTE, 2: CUTOUT
     distance: 0,
     score: 0,
     bestScore: parseInt(localStorage.getItem('vector_best_score') || '0', 10),
     speed: 520,
     baseSpeed: 520,
-    maxSpeed: 920,
+    maxSpeed: 900,
     surgeMeter: 100,
     surgeActiveTimer: 0,
-    hunterGap: 28, // meters behind runner; 0 = caught!
-    cameraY: 0,
+    hunterGap: 28,
     screenShake: 0,
     bgScrollX: 0,
     time: 0
@@ -245,7 +234,7 @@
 
   // Player & Hunter Entities
   const runner = {
-    x: 260,
+    x: 270,
     y: 0,
     vy: 0,
     width: 44,
@@ -264,7 +253,7 @@
   };
 
   const hunter = {
-    x: 80,
+    x: 90,
     y: 0,
     vy: 0,
     onGround: true,
@@ -278,7 +267,6 @@
   let obstacles = [];
   let farBuildings = [];
   let midBuildings = [];
-  let nearMidProps = [];
   let floatingTexts = [];
   let particles = [];
   let rainDrops = [];
@@ -291,11 +279,9 @@
   function initParallaxLayers() {
     farBuildings = [];
     midBuildings = [];
-    nearMidProps = [];
     rainDrops = [];
     shuttles = [];
 
-    // Far horizon megastructures
     let fx = -100;
     while (fx < W * 2.2) {
       const bw = 90 + Math.random() * 140;
@@ -305,13 +291,11 @@
         w: bw,
         h: bh,
         hasSpire: Math.random() > 0.45,
-        hasBridge: Math.random() > 0.65,
-        type: Math.floor(Math.random() * 3)
+        hasBridge: Math.random() > 0.65
       });
       fx += bw - 12;
     }
 
-    // Midground brutalist buildings, cranes, cooling towers
     let mx = -100;
     while (mx < W * 2.2) {
       const bw = 75 + Math.random() * 125;
@@ -343,8 +327,7 @@
       mx += bw + 10 + Math.random() * 25;
     }
 
-    // Rain particles for Zone 2
-    for (let i = 0; i < 190; i++) {
+    for (let i = 0; i < 160; i++) {
       rainDrops.push({
         x: Math.random() * W * 1.3,
         y: Math.random() * H,
@@ -353,7 +336,6 @@
       });
     }
 
-    // Flying transit shuttles for Zone 3
     for (let i = 0; i < 5; i++) {
       shuttles.push({
         x: Math.random() * W,
@@ -372,7 +354,7 @@
     const deltaY = isFirst ? 0 : (Math.random() - 0.48) * 60;
     const y = Math.max(H * 0.60, Math.min(H * 0.80, prevY + deltaY));
 
-    // Populate playable parkour obstacles first with generous landing/takeoff zones & spacing
+    // Populate playable parkour obstacles with generous landing/takeoff zones & spacing
     const segmentObstacles = [];
     if (!isFirst) {
       const speedFactor = Math.max(1, state.speed / 520);
@@ -384,7 +366,6 @@
         const kindRoll = Math.random();
         let obs;
         if (kindRoll < 0.44) {
-          // Vaultable AC Unit / Ventilation Block
           obs = {
             x: ox,
             y: y - 46,
@@ -396,7 +377,6 @@
             hit: false
           };
         } else if (kindRoll < 0.78) {
-          // Low Overhead Duct / Hanging Steel Girder (Must Slide Under!)
           obs = {
             x: ox,
             y: y - 110,
@@ -408,7 +388,6 @@
             hit: false
           };
         } else {
-          // High Barrier / Solar Skylight Array (Jump or Vault)
           obs = {
             x: ox,
             y: y - 58,
@@ -423,7 +402,6 @@
         obstacles.push(obs);
         segmentObstacles.push(obs);
 
-        // Ensure comfortable recovery & reaction distance before next obstacle (540px - 820px+)
         const minSpacing = (540 + Math.random() * 280) * speedFactor;
         ox += minSpacing;
       }
@@ -482,7 +460,7 @@
       createRooftopSegment(last.x + last.w, last.y, false);
     }
 
-    runner.x = Math.min(280, W * 0.25);
+    runner.x = Math.min(280, W * 0.24);
     runner.y = groundBaseY;
     runner.vy = 0;
     runner.onGround = true;
@@ -542,13 +520,12 @@
     if (state.mode !== 'PLAYING') return;
     sfx.init();
 
-    // Check if near an obstacle for a Parkour Vault move!
     const nearObs = obstacles.find(
       (o) =>
         !o.cleared &&
         (o.type === 'VAULT_AC' || o.type === 'HIGH_VENT') &&
-        o.x - runner.x > -20 &&
-        o.x - runner.x < 125
+        o.x - runner.x > -24 &&
+        o.x - runner.x < 135
     );
 
     if (runner.onGround) {
@@ -557,7 +534,6 @@
       runner.jumpCount = 1;
 
       if (nearObs) {
-        // Execute signature Vector Parkour Vault!
         runner.vy = -660;
         runner.vaultTimer = 0.42;
         const vaultNames = ['KONG VAULT', 'SPEED VAULT', 'MONKEY VAULT', 'DASH VAULT'];
@@ -573,7 +549,6 @@
         sfx.jump();
       }
     } else if (runner.jumpCount < 2) {
-      // Mid-air Parkour Webster Front-Flip (Double Jump)
       runner.vy = -610;
       runner.jumpCount = 2;
       runner.isFlipping = true;
@@ -590,7 +565,6 @@
     sfx.init();
 
     if (!runner.onGround) {
-      // Fast drop into a Parkour Safety Roll
       runner.vy = 920;
       runner.isSliding = true;
       runner.slideTimer = 0.65;
@@ -637,7 +611,7 @@
       clearTimeout(zoneBanner._timer);
       zoneBanner._timer = setTimeout(() => {
         zoneBanner.classList.add('hidden');
-      }, 2800);
+      }, 2500);
     }
   }
 
@@ -661,15 +635,29 @@
 
   function cycleRenderStyle() {
     state.renderStyle = (state.renderStyle + 1) % 3;
-    const labels = ['STYLE: HYBRID', 'STYLE: PURE SILHOUETTE', 'STYLE: FULL CUTOUT'];
-    btnStyleMode.textContent = labels[state.renderStyle];
+    const labels = ['HYBRID', 'SILHOUETTE', 'CUTOUT'];
+    styleBtnText.textContent = labels[state.renderStyle];
     if (state.mode === 'PLAYING') {
-      addFloatingText(labels[state.renderStyle], runner.x, runner.y - 120, '#ff9d2e');
+      addFloatingText(`STYLE: ${labels[state.renderStyle]}`, runner.x, runner.y - 120, '#ff9d2e');
     }
   }
 
+  async function requestFullscreenLandscape() {
+    try {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+      if (screen.orientation && screen.orientation.lock) {
+        await screen.orientation.lock('landscape').catch(() => {});
+      }
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
-  // INPUT LISTENERS
+  // INPUT LISTENERS (Desktop Keyboard + Mobile Multi-Touch & Rotate-Aware Gestures)
   // ---------------------------------------------------------------------------
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
@@ -688,17 +676,14 @@
     } else if (e.code === 'Digit1') {
       state.autoCycleZones = false;
       btnAutoZone.classList.remove('auto-active');
-      btnAutoZone.textContent = 'AUTO CYCLE: OFF';
       switchZone(0, true);
     } else if (e.code === 'Digit2') {
       state.autoCycleZones = false;
       btnAutoZone.classList.remove('auto-active');
-      btnAutoZone.textContent = 'AUTO CYCLE: OFF';
       switchZone(1, true);
     } else if (e.code === 'Digit3') {
       state.autoCycleZones = false;
       btnAutoZone.classList.remove('auto-active');
-      btnAutoZone.textContent = 'AUTO CYCLE: OFF';
       switchZone(2, true);
     } else if (e.code === 'KeyC') {
       toggleRoleSwap();
@@ -706,38 +691,69 @@
       cycleRenderStyle();
     } else if (e.code === 'KeyM') {
       sfx.enabled = !sfx.enabled;
-      btnAudio.innerHTML = sfx.enabled ? '&#9835; SFX: ON' : '&#9835; SFX: OFF';
+      btnAudio.style.opacity = sfx.enabled ? '1' : '0.45';
     } else if (e.code === 'KeyP' || e.code === 'Escape') {
       togglePause();
     }
   });
 
-  // Touch / Mouse Controls
-  document.getElementById('touch-jump').addEventListener('pointerdown', (e) => {
+  // Ergonomic On-Screen Thumb Buttons
+  function bindTouchBtn(id, action) {
+    const btn = document.getElementById(id);
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.classList.add('pressed');
+      action();
+    });
+    const clearPress = () => btn.classList.remove('pressed');
+    btn.addEventListener('pointerup', clearPress);
+    btn.addEventListener('pointercancel', clearPress);
+    btn.addEventListener('pointerleave', clearPress);
+  }
+
+  bindTouchBtn('touch-jump', triggerJumpOrVault);
+  bindTouchBtn('touch-slide', triggerSlideOrRoll);
+  bindTouchBtn('touch-surge', triggerSurge);
+
+  // Convert screen pointer coordinates into landscape-aligned coordinates (even when CSS rotated 90deg in portrait!)
+  function getLandscapePoint(e) {
+    if (!isForcedLandscape) {
+      return { x: e.clientX, y: e.clientY, viewW: window.innerWidth, viewH: window.innerHeight };
+    }
+    // When #game-container is rotated 90deg clockwise in portrait mode:
+    // Landscape X corresponds to clientY; Landscape Y corresponds to (window.innerWidth - clientX)
+    return {
+      x: e.clientY,
+      y: window.innerWidth - e.clientX,
+      viewW: window.innerHeight,
+      viewH: window.innerWidth
+    };
+  }
+
+  let touchStartPt = null;
+  canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    triggerJumpOrVault();
-  });
-  document.getElementById('touch-slide').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    triggerSlideOrRoll();
-  });
-  document.getElementById('touch-surge').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    triggerSurge();
+    touchStartPt = getLandscapePoint(e);
   });
 
-  let touchStartY = null;
-  canvas.addEventListener('pointerdown', (e) => {
-    touchStartY = e.clientY;
-  });
   canvas.addEventListener('pointerup', (e) => {
-    if (touchStartY === null) return;
-    const dy = e.clientY - touchStartY;
-    if (dy < -30) triggerJumpOrVault();
-    else if (dy > 30) triggerSlideOrRoll();
-    else if (e.clientX > W * 0.5) triggerJumpOrVault();
-    else triggerSlideOrRoll();
-    touchStartY = null;
+    if (!touchStartPt) return;
+    const endPt = getLandscapePoint(e);
+    const dx = endPt.x - touchStartPt.x;
+    const dy = endPt.y - touchStartPt.y;
+
+    if (Math.abs(dy) > 26 && Math.abs(dy) >= Math.abs(dx)) {
+      if (dy < 0) triggerJumpOrVault();
+      else triggerSlideOrRoll();
+    } else if (dx > 45 && Math.abs(dx) > Math.abs(dy)) {
+      triggerSurge();
+    } else {
+      // Quick Tap: Right half of landscape screen = Jump/Vault, Left half = Slide/Roll
+      if (endPt.x > endPt.viewW * 0.5) triggerJumpOrVault();
+      else triggerSlideOrRoll();
+    }
+    touchStartPt = null;
   });
 
   // UI Buttons
@@ -745,7 +761,6 @@
     btn.addEventListener('click', () => {
       state.autoCycleZones = false;
       btnAutoZone.classList.remove('auto-active');
-      btnAutoZone.textContent = 'AUTO CYCLE: OFF';
       switchZone(parseInt(btn.dataset.zone, 10), true);
     });
   });
@@ -759,20 +774,26 @@
   btnAutoZone.addEventListener('click', () => {
     state.autoCycleZones = !state.autoCycleZones;
     btnAutoZone.classList.toggle('auto-active', state.autoCycleZones);
-    btnAutoZone.textContent = state.autoCycleZones ? 'AUTO CYCLE: ON' : 'AUTO CYCLE: OFF';
   });
 
   btnSwapChars.addEventListener('click', toggleRoleSwap);
   modalSwapBtn.addEventListener('click', toggleRoleSwap);
   btnStyleMode.addEventListener('click', cycleRenderStyle);
+  btnFullscreen.addEventListener('click', requestFullscreenLandscape);
 
   btnAudio.addEventListener('click', () => {
     sfx.enabled = !sfx.enabled;
-    btnAudio.innerHTML = sfx.enabled ? '&#9835; SFX: ON' : '&#9835; SFX: OFF';
+    btnAudio.style.opacity = sfx.enabled ? '1' : '0.45';
   });
 
   btnPause.addEventListener('click', togglePause);
-  btnStartGame.addEventListener('click', startGame);
+  btnStartGame.addEventListener('click', () => {
+    // On mobile touch devices, try locking landscape orientation gracefully
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+    startGame();
+  });
 
   function startGame() {
     sfx.init();
@@ -788,7 +809,7 @@
       modalTag.textContent = 'SYSTEM PAUSED';
       modalTitle.textContent = 'RUN SUSPENDED';
       modalSubtitle.textContent = `Current Distance: ${Math.floor(state.distance)}m | Score: ${Math.floor(state.score).toLocaleString()}. Switch zones, swap roles, or resume your rooftop escape.`;
-      btnStartGame.innerHTML = '&#9654; RESUME ESCAPE';
+      btnStartGame.innerHTML = '&#9654; RESUME';
       modalOverlay.classList.remove('hidden');
     } else if (state.mode === 'PAUSED') {
       state.mode = 'PLAYING';
@@ -807,7 +828,7 @@
     }
     modalTag.textContent = 'ESCAPE TERMINATED';
     modalTitle.textContent = reason;
-    modalSubtitle.textContent = `You covered ${Math.floor(state.distance)}m across the rooftops with a total score of ${finalScore.toLocaleString()}. Ready for another run?`;
+    modalSubtitle.textContent = `Distance: ${Math.floor(state.distance)}m | Total Score: ${finalScore.toLocaleString()}.`;
     btnStartGame.innerHTML = '&#8635; RUN AGAIN';
     modalOverlay.classList.remove('hidden');
   }
@@ -820,8 +841,7 @@
 
     if (state.mode !== 'PLAYING') return;
 
-    // Speed progression & Surge multiplier
-    state.baseSpeed = Math.min(state.maxSpeed, 520 + state.distance * 0.24);
+    state.baseSpeed = Math.min(state.maxSpeed, 520 + state.distance * 0.22);
     let currentSpeed = state.baseSpeed;
 
     if (state.surgeActiveTimer > 0) {
@@ -836,20 +856,16 @@
     const dx = currentSpeed * dt;
     state.bgScrollX += dx;
 
-    // Distance & Score
     const prevDistFloor = Math.floor(state.distance / 450);
     state.distance += dx / 42;
     state.score += (dx / 42) * 10;
 
-    // Auto-cycle zones every 450m
     if (state.autoCycleZones && Math.floor(state.distance / 450) > prevDistFloor) {
       switchZone((state.currentZone + 1) % 3, true);
     }
 
-    // Regenerate Surge slowly while running cleanly
     state.surgeMeter = Math.min(100, state.surgeMeter + dt * 6.5);
 
-    // Move Rooftops & Obstacles
     for (let i = rooftops.length - 1; i >= 0; i--) {
       rooftops[i].x -= dx;
     }
@@ -866,7 +882,6 @@
       }
     }
 
-    // Scroll Parallax Layers
     farBuildings.forEach((b) => {
       b.x -= dx * 0.12;
     });
@@ -887,12 +902,10 @@
       midBuildings.push(first);
     }
 
-    // Monorail train
     monorail.x += (monorail.speed - dx * 0.45) * dt;
     if (monorail.x > W + 700) monorail.x = -900;
     if (monorail.x < -1100) monorail.x = W + 600;
 
-    // Zone 2 Rain Drops
     if (ZONES[state.currentZone].hasRain) {
       rainDrops.forEach((r) => {
         r.x -= (dx * 0.65 + 240) * dt;
@@ -905,7 +918,6 @@
       });
     }
 
-    // Zone 3 Shuttles
     if (ZONES[state.currentZone].hasShuttles) {
       shuttles.forEach((s) => {
         s.x += (s.dir * s.speed - dx * 0.15) * dt;
@@ -934,17 +946,15 @@
     }
 
     const prevY = runner.y;
-    runner.vy += 1780 * dt; // Gravity
+    runner.vy += 1780 * dt;
     runner.y += runner.vy * dt;
 
-    // Find current rooftop beneath runner
     const activeRoof = rooftops.find(
       (r) => runner.x + 16 >= r.x && runner.x - 16 <= r.x + r.w
     );
 
     if (activeRoof) {
-      // Landing on top of rooftop
-      if (prevY <= activeRoof.y + 16 && runner.y >= activeRoof.y && runner.vy >= 0) {
+      if (prevY <= activeRoof.y + 18 && runner.y >= activeRoof.y && runner.vy >= 0) {
         runner.y = activeRoof.y;
         runner.vy = 0;
         runner.onGround = true;
@@ -952,11 +962,10 @@
         runner.isFlipping = false;
         runner.flipAngle = 0;
       } else if (
-        // Ledge Grab Climb-Up! If hitting slightly below the front edge of a building
-        runner.x >= activeRoof.x - 14 &&
-        runner.x <= activeRoof.x + 36 &&
+        runner.x >= activeRoof.x - 16 &&
+        runner.x <= activeRoof.x + 38 &&
         runner.y > activeRoof.y &&
-        runner.y < activeRoof.y + 68
+        runner.y < activeRoof.y + 72
       ) {
         runner.y = activeRoof.y;
         runner.vy = -220;
@@ -973,24 +982,21 @@
       runner.onGround = false;
     }
 
-    // Check Fall into Abyss
     if (runner.y > H + 140) {
-      triggerGameOver('FELL INTO THE URBAN ABYSS');
+      triggerGameOver('FELL INTO THE ABYSS');
       return;
     }
 
-    // Check Obstacle Collisions
     const rBox = {
-      x: runner.x - 16,
-      y: runner.isSliding ? runner.y - 42 : runner.y - 86,
-      w: 32,
-      h: runner.isSliding ? 42 : 84
+      x: runner.x - 15,
+      y: runner.isSliding ? runner.y - 40 : runner.y - 84,
+      w: 30,
+      h: runner.isSliding ? 40 : 82
     };
 
     obstacles.forEach((obs) => {
       if (obs.hit) return;
 
-      // Check close-call slide under duct bonus
       if (
         obs.type === 'SLIDE_DUCT' &&
         !obs.cleared &&
@@ -1004,7 +1010,6 @@
         addFloatingText('POWER SLIDE +125', runner.x, runner.y - 75, '#00e5ff');
       }
 
-      // AABB intersection
       const overlap =
         rBox.x < obs.x + obs.w - 6 &&
         rBox.x + rBox.w > obs.x + 6 &&
@@ -1013,7 +1018,6 @@
 
       if (overlap) {
         if (state.surgeActiveTimer > 0) {
-          // Smash through obstacle during Adrenaline Surge!
           obs.hit = true;
           obs.cleared = true;
           spawnSparks(obs.x + obs.w / 2, obs.y + obs.h / 2, '#ff2a85', 18);
@@ -1021,30 +1025,27 @@
           state.score += 200;
           sfx.vault();
         } else {
-          // Stumble! Hunter closes in!
           obs.hit = true;
           runner.stumbleTimer = 0.85;
           state.hunterGap -= 10.5;
           state.screenShake = 11;
           spawnSparks(runner.x, runner.y - 40, '#ef4444', 18);
-          addFloatingText('STUMBLED! HUNTER CLOSING IN!', runner.x, runner.y - 115, '#ef4444');
+          addFloatingText('STUMBLED!', runner.x, runner.y - 115, '#ef4444');
           sfx.hit();
         }
       }
     });
 
-    // Hunter Logic
     if (runner.stumbleTimer <= 0 && state.surgeActiveTimer <= 0) {
       state.hunterGap = Math.min(32, state.hunterGap + dt * 0.9);
     }
 
     if (state.hunterGap <= 0) {
       state.hunterGap = 0;
-      triggerGameOver('CAPTURED BY THE SECTOR ENFORCER');
+      triggerGameOver('CAPTURED BY ENFORCER');
       return;
     }
 
-    // Position Hunter relative to Runner based on hunterGap
     const targetHunterX = runner.x - Math.max(38, state.hunterGap * 6.8);
     hunter.x += (targetHunterX - hunter.x) * Math.min(1, dt * 8);
     hunter.animPhase += dt * (currentSpeed / 40);
@@ -1055,7 +1056,6 @@
     const targetHunterY = hunterRoof ? hunterRoof.y : runner.y;
     hunter.y += (targetHunterY - hunter.y) * Math.min(1, dt * 14);
 
-    // Motion Trail for Runner
     if (state.surgeActiveTimer > 0 || runner.vaultTimer > 0 || runner.isFlipping) {
       runner.trail.push({
         x: runner.x,
@@ -1070,7 +1070,6 @@
       if (runner.trail[i].alpha <= 0) runner.trail.splice(i, 1);
     }
 
-    // Update Floating Callouts & Sparks
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
       const ft = floatingTexts[i];
       ft.y += ft.vy * dt;
@@ -1091,17 +1090,17 @@
       state.screenShake = Math.max(0, state.screenShake - dt * 28);
     }
 
-    // Update HUD
-    hudDistance.textContent = `${String(Math.floor(state.distance)).padStart(4, '0')} m`;
+    // Update Compact HUD
+    hudDistance.textContent = `${String(Math.floor(state.distance)).padStart(4, '0')}m`;
     hudScore.textContent = Math.floor(state.score).toLocaleString();
 
     const dangerPct = Math.max(0, Math.min(100, ((35 - state.hunterGap) / 35) * 100));
     hunterBar.style.width = `${dangerPct}%`;
     if (state.hunterGap < 11) {
-      hunterDistText.textContent = `CRITICAL (${Math.floor(state.hunterGap)}m)`;
+      hunterDistText.textContent = `DANGER (${Math.floor(state.hunterGap)}m)`;
       hunterDistText.style.color = '#ef4444';
     } else if (state.hunterGap < 20) {
-      hunterDistText.textContent = `WARNING (${Math.floor(state.hunterGap)}m)`;
+      hunterDistText.textContent = `WARN (${Math.floor(state.hunterGap)}m)`;
       hunterDistText.style.color = '#f59e0b';
     } else {
       hunterDistText.textContent = `SAFE (${Math.floor(state.hunterGap)}m)`;
@@ -1111,23 +1110,21 @@
     surgeBar.style.width = `${state.surgeMeter}%`;
     surgeText.textContent =
       state.surgeActiveTimer > 0
-        ? 'SURGING!'
+        ? 'ACTIVE!'
         : state.surgeMeter >= 35
-        ? 'READY [SHIFT]'
+        ? 'READY'
         : `${Math.floor(state.surgeMeter)}%`;
   }
 
   // ---------------------------------------------------------------------------
-  // RENDERING SYSTEM (High-Contrast Vector Silhouette & Atmospheric Parallax)
+  // RENDERING SYSTEM
   // ---------------------------------------------------------------------------
   function drawSkyAndBackgroundImage(zone) {
-    // 1. Moody Twilight / Rain / Dawn Gradient Sky
     const skyGrad = ctx.createLinearGradient(0, 0, 0, H * 0.85);
     zone.skyStops.forEach((s) => skyGrad.addColorStop(s.pos, s.color));
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // 2. Seamlessly Tiled Scrollable Background Asset (if loaded for current zone)
     const bgImg = assets.bgZones[state.currentZone];
     if (assets.loaded.bg[state.currentZone] && bgImg.naturalWidth > 0) {
       ctx.save();
@@ -1137,7 +1134,6 @@
       const drawH = bgImg.naturalHeight * scale;
       const scrollOffset = (state.bgScrollX * 0.08) % (drawW * 2);
 
-      // Draw normal + horizontally mirrored tile for seamless infinite scrolling
       for (let tile = -1; tile <= 2; tile++) {
         const tx = tile * drawW - (scrollOffset % drawW);
         ctx.save();
@@ -1153,7 +1149,6 @@
       ctx.restore();
     }
 
-    // 3. Zone 2 Sweeping Searchlights cutting through the rainy sky
     if (zone.hasSearchlights) {
       for (let i = 0; i < 3; i++) {
         const baseX = (W * (0.22 + i * 0.3)) % W;
@@ -1181,16 +1176,13 @@
   function drawBackgroundLayer(zone) {
     const horizonY = H * 0.78;
 
-    // Far Layer: Soft hazy blue-gray & muted violet megastructures
     ctx.fillStyle = zone.farLayerColor;
     farBuildings.forEach((b, idx) => {
       const by = horizonY - b.h;
       ctx.fillRect(b.x, by, b.w, b.h + 120);
 
-      // Communication Spire
       if (b.hasSpire) {
         ctx.fillRect(b.x + b.w * 0.45, by - 65, 4, 65);
-        // Blinking beacon speck
         if (Math.sin(state.time * 3 + idx) > 0) {
           ctx.fillStyle = zone.accentGlow;
           ctx.fillRect(b.x + b.w * 0.45 - 1, by - 68, 6, 6);
@@ -1198,14 +1190,12 @@
         }
       }
 
-      // Elevated Sky-Bridge connecting far towers
       if (b.hasBridge) {
         ctx.fillRect(b.x + b.w, by + 45, 95, 10);
         ctx.fillRect(b.x + b.w, by + 62, 95, 5);
       }
     });
 
-    // Zone 3 Distant Flying Transit Shuttles
     if (zone.hasShuttles) {
       shuttles.forEach((s) => {
         ctx.save();
@@ -1222,7 +1212,6 @@
       });
     }
 
-    // Volumetric Atmospheric Fog Veil between Background & Midground
     const fogGrad = ctx.createLinearGradient(0, H * 0.42, 0, H * 0.85);
     fogGrad.addColorStop(0, 'rgba(0,0,0,0)');
     fogGrad.addColorStop(0.6, zone.hazeColor);
@@ -1234,7 +1223,6 @@
   function drawMidgroundLayer(zone) {
     const horizonY = H * 0.8;
 
-    // Elevated Transit / Monorail Track across Midground
     if (zone.hasMonorail) {
       const trackY = H * 0.54;
       ctx.fillStyle = zone.midLayerColor;
@@ -1243,7 +1231,6 @@
         ctx.fillRect(px, trackY, 16, H - trackY);
       }
 
-      // Passing sleek silhouette Monorail Train with glowing strip windows
       const trainY = trackY - 22;
       ctx.fillStyle = '#110f1d';
       ctx.beginPath();
@@ -1260,13 +1247,11 @@
       }
     }
 
-    // Midground Brutalist Buildings, Hyperbolic Cooling Towers & Cranes
     midBuildings.forEach((b) => {
       const by = horizonY - b.h;
       ctx.fillStyle = zone.midLayerColor;
 
       if (b.kind === 'cooling_tower' && state.currentZone === 1) {
-        // Hyperbolic Industrial Cooling Tower silhouette
         ctx.beginPath();
         ctx.moveTo(b.x, horizonY + 80);
         ctx.quadraticCurveTo(b.x + b.w * 0.24, by + b.h * 0.4, b.x + b.w * 0.14, by);
@@ -1277,7 +1262,6 @@
       } else {
         ctx.fillRect(b.x, by, b.w, b.h + 100);
 
-        // Construction Crane on top
         if (b.kind === 'crane_tower') {
           const cx = b.x + b.w * 0.5;
           ctx.fillRect(cx - 4, by - 85, 8, 85);
@@ -1285,7 +1269,6 @@
           ctx.fillRect(cx + 75, by - 75, 2, 42);
         }
 
-        // Tiny glowing window specks
         b.windows.forEach((win) => {
           ctx.fillStyle = zone.windowColors[win.cIdx % zone.windowColors.length];
           ctx.globalAlpha = 0.65;
@@ -1293,7 +1276,6 @@
         });
         ctx.globalAlpha = 1.0;
 
-        // Zone 3 Faint Glowing Holographic Corporate Sign
         if (state.currentZone === 2 && b.hasHoloSign) {
           ctx.save();
           ctx.strokeStyle = zone.accentGlow;
@@ -1310,18 +1292,15 @@
   }
 
   function drawImmediateForeground() {
-    // Pitch-Black Silhouette (#0A0A0F) with razor-sharp edges
     ctx.fillStyle = '#0A0A0F';
     ctx.strokeStyle = '#0A0A0F';
 
     for (let i = 0; i < rooftops.length; i++) {
       const r = rooftops[i];
 
-      // Main Building Block & Architectural Ledge
       ctx.fillRect(r.x, r.y, r.w, r.h);
       ctx.fillRect(r.x - 8, r.y, r.w + 16, 14);
 
-      // Exterior Industrial Fire-Escape / Access Ladder on building edge
       if (r.hasLadder) {
         const lx = r.x - 14;
         ctx.lineWidth = 2.5;
@@ -1337,7 +1316,6 @@
         ctx.stroke();
       }
 
-      // Hanging Power Cables between rooftops
       if (r.hasCableToNext && i < rooftops.length - 1) {
         const next = rooftops[i + 1];
         ctx.lineWidth = 2;
@@ -1352,7 +1330,7 @@
         ctx.stroke();
       }
 
-      // Rooftop Silhouette Props (Recessed slightly into the roof edge so they never obscure playable obstacles)
+      // Rooftop Silhouette Props (Recessed slightly so they never obscure playable obstacles)
       ctx.save();
       ctx.globalAlpha = 0.48;
       r.props.forEach((p) => {
@@ -1360,7 +1338,6 @@
         const py = r.y;
 
         if (p.type === 'water_tower') {
-          // Steel Water Tower Legs & Tank
           ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.moveTo(px + 6, py);
@@ -1370,7 +1347,6 @@
           ctx.moveTo(px + 9, py - 28);
           ctx.lineTo(px + p.w - 9, py - 28);
           ctx.stroke();
-          // Tank cylinder + conical roof
           ctx.fillRect(px + 8, py - 102, p.w - 16, 48);
           ctx.beginPath();
           ctx.moveTo(px + 4, py - 102);
@@ -1412,31 +1388,25 @@
       ctx.restore();
     }
 
-    // Playable Parkour Obstacles (AC Units, Overhead Ducts, Vents)
+    // Playable Parkour Obstacles
     obstacles.forEach((obs) => {
       ctx.save();
       ctx.fillStyle = '#0A0A0F';
 
       if (obs.type === 'VAULT_AC') {
-        // Industrial AC Unit with silhouette fan grill & warning indicator
         ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
         ctx.strokeStyle = ZONES[state.currentZone].accentGlow;
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = 2;
         ctx.strokeRect(obs.x + 2, obs.y + 2, obs.w - 4, obs.h - 4);
-        // Vault directional chevron hint
         ctx.fillStyle = ZONES[state.currentZone].accentGlow;
         ctx.fillRect(obs.x + 8, obs.y + 8, 12, 3);
       } else if (obs.type === 'SLIDE_DUCT') {
-        // Overhead Ventilation Duct supported by steel stanchions (Must Slide Under)
         ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-        // Support legs down to rooftop
         ctx.fillRect(obs.x + 4, obs.y - 14, 5, obs.roofY - (obs.y - 14));
         ctx.fillRect(obs.x + obs.w - 9, obs.y - 14, 5, obs.roofY - (obs.y - 14));
-        // Bottom clearance hazard stripe
         ctx.fillStyle = '#ff9d2e';
         ctx.fillRect(obs.x + 4, obs.y + obs.h - 4, obs.w - 8, 3);
       } else if (obs.type === 'HIGH_VENT') {
-        // Angled Geometric Skylight / High Vent
         ctx.beginPath();
         ctx.moveTo(obs.x, obs.y + obs.h);
         ctx.lineTo(obs.x + 8, obs.y);
@@ -1445,25 +1415,20 @@
         ctx.closePath();
         ctx.fill();
         ctx.strokeStyle = '#00e5ff';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         ctx.stroke();
       }
       ctx.restore();
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // ARTICULATED PARKOUR CHARACTER RENDERER (Uses Uploaded Images + Vector Rig)
-  // ---------------------------------------------------------------------------
   function drawParkourCharacter(entity, isHunter) {
     ctx.save();
     ctx.translate(entity.x, entity.y);
 
-    // Pick which uploaded character asset belongs to this entity
     const useFullImg = (!state.swapRoles && isHunter) || (state.swapRoles && !isHunter);
     const rimColor = isHunter ? '#ff2a85' : '#00e5ff';
 
-    // Handle Sliding / Rolling / Flipping transformations
     if (entity.isSliding) {
       ctx.translate(0, -20);
       ctx.rotate(-Math.PI * 0.36);
@@ -1478,7 +1443,6 @@
       ctx.translate(0, 46);
     }
 
-    // Mode 2 or Full Body Cutout Mode for the Blue-Jacket Character
     if (
       (state.renderStyle === 2 || (state.renderStyle === 0 && useFullImg)) &&
       assets.loaded.charFull &&
@@ -1489,8 +1453,6 @@
       ctx.save();
       ctx.translate(0, -48 + bob);
       ctx.rotate(tilt);
-
-      // Glowing Vector Silhouette Rim Aura behind the cutout so he pops against dark buildings
       ctx.shadowColor = rimColor;
       ctx.shadowBlur = 14;
       ctx.drawImage(assets.charFull, -32, -52, 64, 104);
@@ -1499,7 +1461,6 @@
       return;
     }
 
-    // Articulated 2D Vector Parkour Runner Kinematic Skeleton (#0A0A0F with razor-sharp rim light)
     const phase = entity.animPhase;
     const bob = entity.onGround ? Math.abs(Math.sin(phase)) * 6 : 0;
     const hipY = -44 - bob;
@@ -1509,7 +1470,6 @@
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Limb Angles
     const thigh1 = Math.sin(phase) * 0.75;
     const calf1 = Math.max(0, Math.sin(phase - 0.7)) * 1.1;
     const thigh2 = Math.sin(phase + Math.PI) * 0.75;
@@ -1537,11 +1497,9 @@
       ctx.stroke();
     };
 
-    // Back Leg & Back Arm
     drawLimb(0, hipY, thigh2, 22, calf2, 22, 8.5);
     drawLimb(shoulderX, shoulderY, arm2, 18, -0.85, 16, 7);
 
-    // Torso Silhouette
     ctx.beginPath();
     ctx.moveTo(0, hipY);
     ctx.lineTo(shoulderX, shoulderY);
@@ -1552,12 +1510,9 @@
     ctx.strokeStyle = '#0A0A0F';
     ctx.stroke();
 
-    // Front Leg & Front Arm
     drawLimb(0, hipY, thigh1, 22, calf1, 22, 9);
     drawLimb(shoulderX, shoulderY, arm1, 18, -0.9, 16, 7.5);
 
-    // Head: Attach uploaded cutout head (`char_head.png` or `char_full.png` crop) in Hybrid/Cutout mode,
-    // or sleek Vector Silhouette Head in Pure Vector mode
     const headX = shoulderX + 4;
     const headY = shoulderY - 14;
 
@@ -1573,7 +1528,6 @@
       ctx.translate(headX, headY);
       ctx.shadowColor = rimColor;
       ctx.shadowBlur = 10;
-      // Draw upper portrait area of char_full
       ctx.drawImage(
         assets.charFull,
         0,
@@ -1587,7 +1541,6 @@
       );
       ctx.restore();
     } else {
-      // Pure Vector Silhouette Head with Glowing Visor / Eye Band
       ctx.fillStyle = rimColor;
       ctx.beginPath();
       ctx.arc(headX, headY, 10.5, 0, Math.PI * 2);
@@ -1606,7 +1559,6 @@
   }
 
   function drawEffectsAndCallouts(zone) {
-    // Runner Motion Trail
     runner.trail.forEach((t) => {
       ctx.save();
       ctx.globalAlpha = t.alpha * 0.45;
@@ -1617,7 +1569,6 @@
       ctx.restore();
     });
 
-    // Sparks Particles
     particles.forEach((p) => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, p.alpha);
@@ -1626,7 +1577,6 @@
       ctx.restore();
     });
 
-    // Zone 2 Heavy Rain Streaks
     if (zone.hasRain) {
       ctx.save();
       ctx.strokeStyle = 'rgba(175, 225, 255, 0.32)';
@@ -1640,11 +1590,10 @@
       ctx.restore();
     }
 
-    // Floating Parkour Callouts
     floatingTexts.forEach((ft) => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, ft.alpha);
-      ctx.font = '900 15px "Segoe UI", Roboto, sans-serif';
+      ctx.font = '900 16px "Segoe UI", Roboto, sans-serif';
       ctx.fillStyle = ft.color;
       ctx.shadowColor = '#000';
       ctx.shadowBlur = 8;
@@ -1669,7 +1618,6 @@
     drawMidgroundLayer(zone);
     drawImmediateForeground();
 
-    // Draw Hunter & Runner
     drawParkourCharacter(hunter, true);
     drawParkourCharacter(runner, false);
 
@@ -1678,11 +1626,23 @@
   }
 
   // ---------------------------------------------------------------------------
-  // RESIZE & MAIN ANIMATION LOOP
+  // RESPONSIVE LANDSCAPE VIEWPORT & VIRTUAL 720P SCALING
   // ---------------------------------------------------------------------------
   function handleResize() {
-    W = window.innerWidth;
-    H = window.innerHeight;
+    const rawW = window.innerWidth;
+    const rawH = window.innerHeight;
+
+    // If on a mobile/portrait screen (rawH > rawW), auto-rotate the game container 90deg into landscape!
+    isForcedLandscape = rawH > rawW;
+    gameContainer.classList.toggle('force-landscape', isForcedLandscape);
+
+    const viewW = isForcedLandscape ? rawH : rawW;
+    const viewH = isForcedLandscape ? rawW : rawH;
+
+    const aspect = Math.max(1.33, Math.min(2.4, viewW / Math.max(1, viewH)));
+    H = 720;
+    W = Math.round(H * aspect);
+
     canvas.width = W;
     canvas.height = H;
     initParallaxLayers();
@@ -1692,6 +1652,7 @@
   }
 
   window.addEventListener('resize', handleResize);
+  window.addEventListener('orientationchange', () => setTimeout(handleResize, 120));
   handleResize();
 
   let lastTime = performance.now();

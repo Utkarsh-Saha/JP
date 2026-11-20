@@ -1,0 +1,10 @@
+{
+  "name": "VECTOR: Shadow Run",
+  "short_name": "VectorRun",
+  "description": "2D Dystopian Rooftop Parkour Runner",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f"
+}
