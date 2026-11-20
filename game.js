@@ -944,18 +944,6 @@
       b.phase += dt * 4.2;
       if (b.y < b.targetY) {
         b.y = Math.min(b.targetY, b.y + b.vy * dt);
-        // Emit falling smoke/gold trail particles while dropping from the sky
-        if (Math.random() < 0.45) {
-          particles.push({
-            x: b.x + (Math.random() - 0.5) * 18,
-            y: b.y - 16,
-            vx: (Math.random() - 0.5) * 40,
-            vy: -40 - Math.random() * 50,
-            size: 3 + Math.random() * 3,
-            alpha: 0.85,
-            color: Math.random() > 0.4 ? '#4ade80' : '#facc15'
-          });
-        }
       }
       if (b.x < -200 || b.collected) {
         bonusDrops.splice(i, 1);
@@ -1688,72 +1676,17 @@
   }
 
   function drawEffectsAndCallouts(zone) {
-    // Draw Falling / Hovering Ultra Bonus Drops
+    // Draw Falling / Hovering Ultra Bonus Drops (Clean normal uploaded image only)
     bonusDrops.forEach((b) => {
       if (b.collected) return;
-      const hoverY = b.y + Math.sin(b.phase) * 10;
-      const pulse = 1 + Math.sin(b.phase * 1.5) * 0.1;
+      const hoverY = b.y + Math.sin(b.phase) * 8;
 
       ctx.save();
       ctx.translate(b.x, hoverY);
-
-      // Vertical Drop Beacon Line from Sky while falling
-      if (b.y < b.targetY) {
-        const beamGrad = ctx.createLinearGradient(0, 0, 0, -180);
-        beamGrad.addColorStop(0, 'rgba(74, 222, 128, 0.45)');
-        beamGrad.addColorStop(1, 'rgba(74, 222, 128, 0)');
-        ctx.strokeStyle = beamGrad;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -180);
-        ctx.stroke();
-      }
-
-      // Outer Glowing Halo
-      const radGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, 54 * pulse);
-      radGrad.addColorStop(0, 'rgba(250, 204, 21, 0.55)');
-      radGrad.addColorStop(0.55, 'rgba(74, 222, 128, 0.28)');
-      radGrad.addColorStop(1, 'rgba(74, 222, 128, 0)');
-      ctx.fillStyle = radGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, 54 * pulse, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rotating Dashed Ring
-      ctx.save();
-      ctx.rotate(b.phase * 0.6);
-      ctx.strokeStyle = '#4ade80';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([8, 6]);
-      ctx.beginPath();
-      ctx.arc(0, 0, 38 * pulse, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      // Draw Uploaded Bonus Item Image
-      ctx.save();
-      ctx.rotate(Math.sin(b.phase * 0.8) * 0.18);
+      ctx.rotate(Math.sin(b.phase * 0.8) * 0.12);
       if (assets.loaded.bonusUltra) {
-        ctx.shadowColor = '#facc15';
-        ctx.shadowBlur = 16;
         ctx.drawImage(assets.bonusUltra, -b.size * 0.5, -b.size * 0.5, b.size, b.size);
-      } else {
-        ctx.fillStyle = '#facc15';
-        ctx.beginPath();
-        ctx.arc(0, 0, 20, 0, Math.PI * 2);
-        ctx.fill();
       }
-      ctx.restore();
-
-      // Label Tag Above Item
-      ctx.font = '900 11px "Segoe UI", Roboto, sans-serif';
-      ctx.fillStyle = '#facc15';
-      ctx.textAlign = 'center';
-      ctx.shadowColor = '#000';
-      ctx.shadowBlur = 6;
-      ctx.fillText('★ ULTRA DROP ★', 0, -44);
-
       ctx.restore();
     });
 
