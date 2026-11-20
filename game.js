@@ -43,8 +43,9 @@
   const assets = {
     charHead: new Image(),
     charFull: new Image(),
+    bonusUltra: new Image(),
     bgZones: [new Image(), new Image(), new Image()],
-    loaded: { charHead: false, charFull: false, bg: [false, false, false] }
+    loaded: { charHead: false, charFull: false, bonusUltra: false, bg: [false, false, false] }
   };
 
   assets.charHead.onload = () => { assets.loaded.charHead = true; };
@@ -52,6 +53,9 @@
 
   assets.charFull.onload = () => { assets.loaded.charFull = true; };
   assets.charFull.src = 'assets/char_full.png';
+
+  assets.bonusUltra.onload = () => { assets.loaded.bonusUltra = true; };
+  assets.bonusUltra.src = 'assets/bonus_ultra.png';
 
   const bgPaths = ['assets/bg_zone1.png', 'assets/bg_zone2.jpg', 'assets/bg_zone3.png'];
   bgPaths.forEach((path, idx) => {
@@ -197,6 +201,12 @@
     hit() {
       this.playTone(110, 'sawtooth', 0.25, 0.18, 45);
     }
+
+    ultra() {
+      this.playTone(330, 'triangle', 0.15, 0.16, 660);
+      setTimeout(() => this.playTone(495, 'sine', 0.18, 0.16, 990), 90);
+      setTimeout(() => this.playTone(660, 'triangle', 0.35, 0.18, 1320), 180);
+    }
   }
 
   const sfx = new SoundEngine();
@@ -224,6 +234,8 @@
     maxSpeed: 900,
     surgeMeter: 100,
     surgeActiveTimer: 0,
+    ultraTimer: 0,
+    nextBonusSpawnTimer: 6,
     hunterGap: 28,
     screenShake: 0,
     bgScrollX: 0,
@@ -265,6 +277,7 @@
   // World Arrays
   let rooftops = [];
   let obstacles = [];
+  let bonusDrops = [];
   let farBuildings = [];
   let midBuildings = [];
   let floatingTexts = [];
@@ -445,12 +458,28 @@
       hasLadder: true
     };
     rooftops.push(roof);
+
+    // Sometimes drop an Ultra Power Bonus item from the sky onto this rooftop!
+    if (!isFirst && Math.random() < 0.55) {
+      const dropX = x + 260 + Math.random() * Math.max(200, width - 520);
+      const targetY = y - 85 - Math.random() * 65;
+      bonusDrops.push({
+        x: dropX,
+        y: -80 - Math.random() * 140, // starts high in the sky and drops down
+        targetY,
+        vy: 240 + Math.random() * 90,
+        size: 84,
+        phase: Math.random() * Math.PI * 2,
+        collected: false
+      });
+    }
   }
 
   function resetWorld() {
     groundBaseY = H * 0.76;
     rooftops = [];
     obstacles = [];
+    bonusDrops = [];
     floatingTexts = [];
     particles = [];
 
@@ -482,6 +511,8 @@
     state.speed = state.baseSpeed;
     state.surgeMeter = 100;
     state.surgeActiveTimer = 0;
+    state.ultraTimer = 0;
+    state.nextBonusSpawnTimer = 5.5;
     state.hunterGap = 28;
     state.screenShake = 0;
   }
@@ -844,12 +875,36 @@
     state.baseSpeed = Math.min(state.maxSpeed, 520 + state.distance * 0.22);
     let currentSpeed = state.baseSpeed;
 
-    if (state.surgeActiveTimer > 0) {
+    if (state.ultraTimer > 0) {
+      state.ultraTimer -= dt;
+      currentSpeed *= 1.55;
+      state.surgeMeter = 100;
+      state.hunterGap = Math.min(40, state.hunterGap + dt * 3.5);
+    } else if (state.surgeActiveTimer > 0) {
       state.surgeActiveTimer -= dt;
       currentSpeed *= 1.38;
     } else if (runner.stumbleTimer > 0) {
       runner.stumbleTimer -= dt;
       currentSpeed *= 0.62;
+    }
+
+    // Periodic mid-run sky drop guarantee so the player sees drops regularly
+    state.nextBonusSpawnTimer -= dt;
+    if (state.nextBonusSpawnTimer <= 0) {
+      state.nextBonusSpawnTimer = 9 + Math.random() * 5;
+      const aheadRoof = rooftops.find((r) => r.x + r.w > runner.x + 550 && r.x < runner.x + 1100);
+      if (aheadRoof) {
+        const dropX = Math.max(aheadRoof.x + 150, Math.min(aheadRoof.x + aheadRoof.w - 150, runner.x + 680));
+        bonusDrops.push({
+          x: dropX,
+          y: -60,
+          targetY: aheadRoof.y - 95,
+          vy: 280,
+          size: 84,
+          phase: Math.random() * Math.PI * 2,
+          collected: false
+        });
+      }
     }
 
     state.speed = currentSpeed;
@@ -879,6 +934,31 @@
       obstacles[i].x -= dx;
       if (obstacles[i].x + obstacles[i].w < -200) {
         obstacles.splice(i, 1);
+      }
+    }
+
+    // Update Falling / Floating Ultra Bonus Drops
+    for (let i = bonusDrops.length - 1; i >= 0; i--) {
+      const b = bonusDrops[i];
+      b.x -= dx;
+      b.phase += dt * 4.2;
+      if (b.y < b.targetY) {
+        b.y = Math.min(b.targetY, b.y + b.vy * dt);
+        // Emit falling smoke/gold trail particles while dropping from the sky
+        if (Math.random() < 0.45) {
+          particles.push({
+            x: b.x + (Math.random() - 0.5) * 18,
+            y: b.y - 16,
+            vx: (Math.random() - 0.5) * 40,
+            vy: -40 - Math.random() * 50,
+            size: 3 + Math.random() * 3,
+            alpha: 0.85,
+            color: Math.random() > 0.4 ? '#4ade80' : '#facc15'
+          });
+        }
+      }
+      if (b.x < -200 || b.collected) {
+        bonusDrops.splice(i, 1);
       }
     }
 
@@ -980,6 +1060,15 @@
       }
     } else {
       runner.onGround = false;
+      // Ultra Power Sky-Boost: Automatically launch across gaps if falling below rooftop level during Ultra Mode!
+      if (state.ultraTimer > 0 && runner.y > H * 0.78 && runner.vy > 0) {
+        runner.vy = -740;
+        runner.isFlipping = true;
+        runner.flipAngle = 0;
+        spawnSparks(runner.x, runner.y, '#4ade80', 18);
+        addFloatingText('ULTRA SKY-BOOST!', runner.x, runner.y - 170, '#4ade80');
+        sfx.vault();
+      }
     }
 
     if (runner.y > H + 140) {
@@ -993,6 +1082,26 @@
       w: 48,
       h: runner.isSliding ? 78 : 164
     };
+
+    // Check Ultra Bonus Drop Pickup
+    bonusDrops.forEach((b) => {
+      if (b.collected) return;
+      const hoverY = b.y + Math.sin(b.phase) * 10;
+      const distX = Math.abs(runner.x - b.x);
+      const distY = Math.abs((runner.y - 84) - hoverY);
+      if (distX < 68 && distY < 96) {
+        b.collected = true;
+        state.ultraTimer = 7.5; // 7.5 seconds of Ultra Power!
+        state.surgeMeter = 100;
+        state.hunterGap = 38;
+        state.score += 1000;
+        state.screenShake = 9;
+        spawnSparks(b.x, hoverY, '#4ade80', 26);
+        spawnSparks(b.x, hoverY, '#facc15', 18);
+        addFloatingText('★ ULTRA POWER ACTIVATED! +1000 ★', runner.x, runner.y - 205, '#4ade80');
+        sfx.ultra();
+      }
+    });
 
     obstacles.forEach((obs) => {
       if (obs.hit) return;
@@ -1017,7 +1126,14 @@
         rBox.y + rBox.h > obs.y + 4;
 
       if (overlap) {
-        if (state.surgeActiveTimer > 0) {
+        if (state.ultraTimer > 0) {
+          obs.hit = true;
+          obs.cleared = true;
+          spawnSparks(obs.x + obs.w / 2, obs.y + obs.h / 2, '#4ade80', 22);
+          addFloatingText('ULTRA SMASH +250', runner.x, runner.y - 190, '#4ade80');
+          state.score += 250;
+          sfx.vault();
+        } else if (state.surgeActiveTimer > 0) {
           obs.hit = true;
           obs.cleared = true;
           spawnSparks(obs.x + obs.w / 2, obs.y + obs.h / 2, '#ff2a85', 18);
@@ -1056,12 +1172,13 @@
     const targetHunterY = hunterRoof ? hunterRoof.y : runner.y;
     hunter.y += (targetHunterY - hunter.y) * Math.min(1, dt * 14);
 
-    if (state.surgeActiveTimer > 0 || runner.vaultTimer > 0 || runner.isFlipping) {
+    if (state.ultraTimer > 0 || state.surgeActiveTimer > 0 || runner.vaultTimer > 0 || runner.isFlipping) {
       runner.trail.push({
         x: runner.x,
         y: runner.y,
         isSliding: runner.isSliding,
-        alpha: 0.55
+        isUltra: state.ultraTimer > 0,
+        alpha: 0.65
       });
     }
     for (let i = runner.trail.length - 1; i >= 0; i--) {
@@ -1108,12 +1225,18 @@
     }
 
     surgeBar.style.width = `${state.surgeMeter}%`;
-    surgeText.textContent =
-      state.surgeActiveTimer > 0
-        ? 'ACTIVE!'
-        : state.surgeMeter >= 35
-        ? 'READY'
-        : `${Math.floor(state.surgeMeter)}%`;
+    if (state.ultraTimer > 0) {
+      surgeText.textContent = `ULTRA (${state.ultraTimer.toFixed(1)}s)`;
+      surgeText.style.color = '#4ade80';
+    } else {
+      surgeText.style.color = '';
+      surgeText.textContent =
+        state.surgeActiveTimer > 0
+          ? 'ACTIVE!'
+          : state.surgeMeter >= 35
+          ? 'READY'
+          : `${Math.floor(state.surgeMeter)}%`;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1429,7 +1552,11 @@
     ctx.scale(2, 2);
 
     const useFullImg = (!state.swapRoles && isHunter) || (state.swapRoles && !isHunter);
-    const rimColor = isHunter ? '#ff2a85' : '#00e5ff';
+    const rimColor = isHunter
+      ? '#ff2a85'
+      : state.ultraTimer > 0
+      ? '#4ade80'
+      : '#00e5ff';
 
     if (entity.isSliding) {
       ctx.translate(0, -20);
@@ -1561,10 +1688,79 @@
   }
 
   function drawEffectsAndCallouts(zone) {
+    // Draw Falling / Hovering Ultra Bonus Drops
+    bonusDrops.forEach((b) => {
+      if (b.collected) return;
+      const hoverY = b.y + Math.sin(b.phase) * 10;
+      const pulse = 1 + Math.sin(b.phase * 1.5) * 0.1;
+
+      ctx.save();
+      ctx.translate(b.x, hoverY);
+
+      // Vertical Drop Beacon Line from Sky while falling
+      if (b.y < b.targetY) {
+        const beamGrad = ctx.createLinearGradient(0, 0, 0, -180);
+        beamGrad.addColorStop(0, 'rgba(74, 222, 128, 0.45)');
+        beamGrad.addColorStop(1, 'rgba(74, 222, 128, 0)');
+        ctx.strokeStyle = beamGrad;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -180);
+        ctx.stroke();
+      }
+
+      // Outer Glowing Halo
+      const radGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, 54 * pulse);
+      radGrad.addColorStop(0, 'rgba(250, 204, 21, 0.55)');
+      radGrad.addColorStop(0.55, 'rgba(74, 222, 128, 0.28)');
+      radGrad.addColorStop(1, 'rgba(74, 222, 128, 0)');
+      ctx.fillStyle = radGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 54 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rotating Dashed Ring
+      ctx.save();
+      ctx.rotate(b.phase * 0.6);
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 38 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw Uploaded Bonus Item Image
+      ctx.save();
+      ctx.rotate(Math.sin(b.phase * 0.8) * 0.18);
+      if (assets.loaded.bonusUltra) {
+        ctx.shadowColor = '#facc15';
+        ctx.shadowBlur = 16;
+        ctx.drawImage(assets.bonusUltra, -b.size * 0.5, -b.size * 0.5, b.size, b.size);
+      } else {
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Label Tag Above Item
+      ctx.font = '900 11px "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = '#facc15';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 6;
+      ctx.fillText('★ ULTRA DROP ★', 0, -44);
+
+      ctx.restore();
+    });
+
     runner.trail.forEach((t) => {
       ctx.save();
       ctx.globalAlpha = t.alpha * 0.45;
-      ctx.fillStyle = state.surgeActiveTimer > 0 ? '#ff2a85' : '#00e5ff';
+      ctx.fillStyle = t.isUltra ? '#4ade80' : (state.surgeActiveTimer > 0 ? '#ff2a85' : '#00e5ff');
       ctx.beginPath();
       ctx.arc(t.x, t.y - (t.isSliding ? 44 : 96), 34, 0, Math.PI * 2);
       ctx.fill();
